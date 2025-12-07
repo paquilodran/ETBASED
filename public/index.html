@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema en Tiempo Real - Oracle & MongoDB</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Sistema de Gestión en Tiempo Real</h1>
+
+        <div class="stats">
+            <div class="stat-card oracle">
+                <h3>Clientes (Oracle)</h3>
+                <p class="count" id="clientesCount">0</p>
+            </div>
+            <div class="stat-card mongo">
+                <h3>Usuarios (MongoDB)</h3>
+                <p class="count" id="usuariosCount">0</p>
+            </div>
+        </div>
+
+        <div class="tables-container">
+            <!-- Tabla de Clientes (Oracle) -->
+            <div class="table-section">
+                <div class="table-header">
+                    <h2>Clientes (Oracle Cloud)</h2>
+                    <button class="btn-toggle" onclick="toggleTable('clientes')">
+                        <span id="toggleIconClientes">▼</span> Mostrar/Ocultar
+                    </button>
+                </div>
+
+                <div class="table-wrapper" id="tableWrapperClientes">
+                    <table id="clientesTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Teléfono</th>
+                                <th>Ciudad</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clientesBody">
+                            <tr>
+                                <td colspan="4" style="text-align:center; color:#999;">
+                                    Cargando clientes...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabla de Usuarios (MongoDB) -->
+            <div class="table-section">
+                <div class="table-header">
+                    <h2>Usuarios (MongoDB Atlas)</h2>
+                    <button class="btn-toggle" onclick="toggleTable('usuarios')">
+                        <span id="toggleIconUsuarios">▼</span> Mostrar/Ocultar
+                    </button>
+                </div>
+
+                <div class="table-wrapper" id="tableWrapperUsuarios">
+                    <table id="usuariosTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nombre</th>
+                                <th>Email</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usuariosBody">
+                            <tr>
+                                <td colspan="4" style="text-align:center; color:#999;">
+                                    Cargando usuarios...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="status" id="status">
+            <span class="status-indicator"></span>
+            <span id="statusText">Conectando...</span>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
