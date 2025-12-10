@@ -3,44 +3,141 @@ require('dotenv').config();
 
 oracledb.outFormat = oracledb.OUT_FORMAT_OBJECT;
 let pool = null;
+let clientInitialized = false;
 
 async function initialize() {
-    const walletLocation = process.env.ORACLE_WALLET_LOCATION;
-    if (!walletLocation) throw new Error('ORACLE_WALLET_LOCATION no definido');
-
-    process.env.TNS_ADMIN = walletLocation;
-
     try {
-        oracledb.initOracleClient({ configDir: walletLocation });
+        let walletLocation = process.env.ORACLE_WALLET_LOCATION;
+        
+        if (!walletLocation) {
+            throw new Error('ORACLE_WALLET_LOCATION no está definido en .env');
+        }
+
+        // Limpiar la ruta de comillas si existen
+        walletLocation = walletLocation.replace(/['"]/g, '');
+        
+        // Verificar que el directorio existe
+        const fs = require('fs');
+        if (!fs.existsSync(walletLocation)) {
+            throw new Error(`El directorio del wallet no existe: ${walletLocation}`);
+        }
+
+        // Verificar archivos críticos del wallet
+        const requiredFiles = ['cwallet.sso', 'tnsnames.ora'];
+        for (const file of requiredFiles) {
+            const filePath = `${walletLocation}/${file}`;
+            if (!fs.existsSync(filePath)) {
+                throw new Error(`Archivo requerido no encontrado: ${filePath}`);
+            }
+        }
+
+        console.log(`✓ Wallet encontrado en: ${walletLocation}`);
+
+        // Inicializar Oracle Client solo una vez
+        if (!clientInitialized) {
+            try {
+                oracledb.initOracleClient({ 
+                    configDir: walletLocation,
+                    libDir: process.env.ORACLE_CLIENT_LIB_DIR // opcional, solo si es necesario
+                });
+                clientInitialized = true;
+                console.log('✓ Oracle Client inicializado');
+            } catch (err) {
+                if (!err.message.includes('already been initialized')) {
+                    throw err;
+                }
+                clientInitialized = true;
+            }
+        }
+
+        // Crear pool de conexiones
+        pool = await oracledb.createPool({
+            user: process.env.ORACLE_USER,
+            password: process.env.ORACLE_PASSWORD,
+            connectString: process.env.ORACLE_CONNECTION_STRING,
+            poolMin: 1,
+            poolMax: 5,
+            poolIncrement: 1,
+            poolTimeout: 60,
+            enableStatistics: true
+        });
+
+        // Probar la conexión
+        const connection = await pool.getConnection();
+        const result = await connection.execute('SELECT 1 FROM DUAL');
+        await connection.close();
+        
+        console.log('✓ Conectado a Oracle Database (Cloud con Wallet)');
+        console.log(`✓ Pool creado - Min: 1, Max: 5`);
+        
+        return true;
     } catch (err) {
-        // ignorar si ya inicializado
+        console.error('✗ Error conectando a Oracle:', err.message);
+        console.error('Detalles:', {
+            user: process.env.ORACLE_USER,
+            connectString: process.env.ORACLE_CONNECTION_STRING,
+            walletLocation: process.env.ORACLE_WALLET_LOCATION
+        });
+        throw err;
     }
-
-    pool = await oracledb.createPool({
-        user: process.env.ORACLE_USER,
-        password: process.env.ORACLE_PASSWORD,
-        connectString: process.env.ORACLE_CONNECTION_STRING, // usa alias del tnsnames.ora
-        poolMin: 1,
-        poolMax: 5,
-        poolIncrement: 1
-    });
-
-    console.log('✓ Conectado a Oracle Database (Cloud con Wallet)');
 }
 
 async function executeQuery(query, binds = {}, options = {}) {
-    if (!pool) throw new Error('Pool de Oracle no inicializado.');
+    if (!pool) {
+        throw new Error('Pool de Oracle no inicializado. Llama a initialize() primero.');
+    }
+    
     let connection;
     try {
         connection = await pool.getConnection();
-        return await connection.execute(query, binds, { autoCommit: true, ...options });
+        const result = await connection.execute(query, binds, { 
+            autoCommit: true, 
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+            ...options 
+        });
+        return result;
+    } catch (err) {
+        console.error('Error ejecutando query Oracle:', err.message);
+        console.error('Query:', query);
+        throw err;
     } finally {
-        if (connection) await connection.close();
+        if (connection) {
+            try {
+                await connection.close();
+            } catch (err) {
+                console.error('Error cerrando conexión:', err);
+            }
+        }
     }
 }
 
 async function close() {
-    if (pool) await pool.close(0);
+    if (pool) {
+        try {
+            await pool.close(10);
+            console.log('✓ Pool de Oracle cerrado');
+        } catch (err) {
+            console.error('Error cerrando pool:', err);
+        }
+    }
 }
 
-module.exports = { initialize, executeQuery, close };
+// Función para verificar el estado del pool
+async function getPoolStats() {
+    if (pool) {
+        return {
+            connectionsOpen: pool.connectionsOpen,
+            connectionsInUse: pool.connectionsInUse,
+            poolMin: pool.poolMin,
+            poolMax: pool.poolMax
+        };
+    }
+    return null;
+}
+
+module.exports = { 
+    initialize, 
+    executeQuery, 
+    close,
+    getPoolStats 
+};

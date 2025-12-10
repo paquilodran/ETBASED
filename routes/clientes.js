@@ -35,19 +35,67 @@ router.get('/count', async (req, res) => {
     }
 });
 
-// Eliminar cliente
+// Eliminar cliente (con eliminación en cascada)
 router.delete('/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        await oracle.executeQuery('DELETE FROM customers WHERE customer_id = :id', { id });
+        
+        // Eliminar en orden inverso de dependencias
+        // 1. Eliminar alertas y recomendaciones
+        await oracle.executeQuery(
+            'DELETE FROM alerts_recommendations WHERE customer_id = :id', 
+            { id }
+        );
+        
+        // 2. Eliminar interacciones con productos
+        await oracle.executeQuery(
+            'DELETE FROM product_interactions WHERE customer_id = :id', 
+            { id }
+        );
+        
+        // 3. Eliminar interacciones de soporte
+        await oracle.executeQuery(
+            'DELETE FROM support_interactions WHERE customer_id = :id', 
+            { id }
+        );
+        
+        // 4. Eliminar documentos comerciales
+        await oracle.executeQuery(
+            'DELETE FROM commercial_documents WHERE customer_id = :id', 
+            { id }
+        );
+        
+        // 5. Eliminar actividades del cliente
+        await oracle.executeQuery(
+            'DELETE FROM customer_activity_log WHERE customer_id = :id', 
+            { id }
+        );
+        
+        // 6. Eliminar planes del cliente
+        await oracle.executeQuery(
+            'DELETE FROM customer_plans WHERE customer_id = :id', 
+            { id }
+        );
+        
+        // 7. Finalmente eliminar el cliente
+        await oracle.executeQuery(
+            'DELETE FROM customers WHERE customer_id = :id', 
+            { id }
+        );
 
         // Emitir evento de Socket.io
         req.io.emit('clienteEliminado', { id });
 
-        res.json({ success: true, message: 'Cliente eliminado' });
+        res.json({ 
+            success: true, 
+            message: 'Cliente y todos sus registros relacionados eliminados correctamente' 
+        });
     } catch (err) {
         console.error('Error eliminando cliente:', err);
-        res.status(500).json({ error: 'Error eliminando cliente', message: err.message });
+        res.status(500).json({ 
+            error: 'Error eliminando cliente', 
+            message: err.message 
+        });
     }
 });
 
