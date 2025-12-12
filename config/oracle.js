@@ -13,16 +13,13 @@ async function initialize() {
             throw new Error('ORACLE_WALLET_LOCATION no está definido en .env');
         }
 
-        // Limpiar la ruta de comillas si existen
-        walletLocation = walletLocation.replace(/['"]/g, '');
+        walletLocation = walletLocation.replace(/['"]/g, '').replace(/\\/g, '/');
         
-        // Verificar que el directorio existe
         const fs = require('fs');
         if (!fs.existsSync(walletLocation)) {
             throw new Error(`El directorio del wallet no existe: ${walletLocation}`);
         }
 
-        // Verificar archivos críticos del wallet
         const requiredFiles = ['cwallet.sso', 'tnsnames.ora'];
         for (const file of requiredFiles) {
             const filePath = `${walletLocation}/${file}`;
@@ -33,12 +30,17 @@ async function initialize() {
 
         console.log(`✓ Wallet encontrado en: ${walletLocation}`);
 
-        // Inicializar Oracle Client solo una vez
+        // ====== AGREGAR ESTAS LÍNEAS ======
+        // Configurar TNS_ADMIN para esta sesión
+        process.env.TNS_ADMIN = walletLocation.replace(/\//g, '\\');
+        console.log(`✓ TNS_ADMIN configurado: ${process.env.TNS_ADMIN}`);
+        // ==================================
+
         if (!clientInitialized) {
             try {
                 oracledb.initOracleClient({ 
                     configDir: walletLocation,
-                    libDir: process.env.ORACLE_CLIENT_LIB_DIR // opcional, solo si es necesario
+                    libDir: process.env.ORACLE_CLIENT_LIB_DIR
                 });
                 clientInitialized = true;
                 console.log('✓ Oracle Client inicializado');
@@ -50,11 +52,15 @@ async function initialize() {
             }
         }
 
-        // Crear pool de conexiones
+        // Crear pool con configuración adicional
         pool = await oracledb.createPool({
             user: process.env.ORACLE_USER,
             password: process.env.ORACLE_PASSWORD,
             connectString: process.env.ORACLE_CONNECTION_STRING,
+            // ====== COMENTAR ESTAS DOS LÍNEAS ======
+            // walletLocation: walletLocation,
+            // walletPassword: process.env.ORACLE_WALLET_PASSWORD || "",
+            // =======================================
             poolMin: 1,
             poolMax: 5,
             poolIncrement: 1,
@@ -62,7 +68,6 @@ async function initialize() {
             enableStatistics: true
         });
 
-        // Probar la conexión
         const connection = await pool.getConnection();
         const result = await connection.execute('SELECT 1 FROM DUAL');
         await connection.close();
