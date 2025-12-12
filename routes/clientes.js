@@ -97,6 +97,29 @@ router.delete('/:id', async (req, res) => {
             message: err.message 
         });
     }
+    
+});
+
+// En routes/clientes.js - ejemplo de uso del package
+router.get('/reporte-mensual', async (req, res) => {
+    try {
+        await oracle.executeQuery(`
+            BEGIN
+                pkg_gestion_comercial.sp_generar_reporte_mensual;
+            END;
+        `);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Usar funciones
+router.get('/total-ventas', async (req, res) => {
+    const result = await oracle.executeQuery(`
+        SELECT fn_total_ventas_mes_actual() as total FROM dual
+    `);
+    res.json({ total: result.rows[0].TOTAL });
 });
 
 module.exports = router;
